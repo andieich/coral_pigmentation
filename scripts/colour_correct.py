@@ -14,7 +14,6 @@ The script uses the following libraries:
 - Matplotlib: To display images and plots
 
 (C) 2025 Andre Goossen
-test
 """
 import os
 import cv2
