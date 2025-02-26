@@ -1,20 +1,3 @@
-"""
-This script performs color correction based on an X-Rite Classic color checker.
-The script uses the color checker to map the color gamut of an image to the target colors.
-
-The script uses the following steps:
-1. Annotate the color checker in the image to crop the color checker.
-2. Extract the color patches from the color checker and perform color correction.
-3. Map the color gamut of the image to the target colors.
-
-The script uses the following libraries:
-- OpenCV: To read and manipulate images
-- Colour: To perform color correction
-- NumPy: To perform numerical operations
-- Matplotlib: To display images and plots
-
-(C) 2025 Andre Goossen
-"""
 import os
 import cv2
 import colour
@@ -67,7 +50,6 @@ targets = {
             'Black':         [ 52,  52,  52],
           }
 
-
 def point_select_callback(event, points, texts):
     """ Callback for mouse click event to select four corners of the color checker """
     if plt.get_current_fig_manager().toolbar.mode == '':
@@ -93,6 +75,8 @@ def undo_last_point(event, points, texts):
 def draw_polygon(event, points):
     """ Callback for key press event to draw the polygon around the color checker and close the interactive plot """
     if event.key == 'enter':
+        if len(points) < 4:
+            raise ValueError("Error: Less than 4 points were chosen to extract the color checker.")
         points = np.array(points)
         polygon = Polygon(points, closed=True, fill=None, edgecolor='r', linewidth=2)
         plt.gca().add_patch(polygon)
@@ -101,6 +85,11 @@ def draw_polygon(event, points):
         # Wait for the plot to update
         plt.pause(1.0)
         plt.close()
+
+def on_close(event, points):
+    """ Callback for close event to check the number of points """
+    if len(points) < 4:
+        raise ValueError("Error: Less than 4 points were chosen to extract the color checker.")
 
 def annotate_color_checker(image_filename):
     """ Deskew and crop the color checker from the provided image """
@@ -111,7 +100,7 @@ def annotate_color_checker(image_filename):
     image = cv2.imread(image_filename)
 
     # Display the image
-    plt.figure()
+    fig = plt.figure()
     plt.title('Select the four corners of the color checker, starting from the top left corner and moving clockwise!')
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
@@ -122,10 +111,12 @@ def annotate_color_checker(image_filename):
     plt.connect('key_press_event', lambda event: draw_polygon(event, points))
     plt.connect('key_press_event', lambda event: undo_last_point(event, points, texts))
 
+    # Define the close event to check the number of points
+    fig.canvas.mpl_connect('close_event', lambda event: on_close(event, points))
+
     plt.show()
 
     return points
-
 
 def deskew_and_crop_color_checker(image_filename, output_filename, points):
     """ Deskew and crop the color checker from the provided image """
@@ -139,7 +130,6 @@ def deskew_and_crop_color_checker(image_filename, output_filename, points):
 
     # Save the color checker
     cv2.imwrite(output_filename, color_checker)
-
 
 def analyze_color_checker(filename, palette_filename=None, debug_filename=None):
     """ Method to crop the patches for each color from the cropped color checker image
@@ -263,7 +253,6 @@ def map_gamut(image_filename, output_filename, targets, patches):
     # Save the transformed image
     cv2.imwrite(output_filename, transformed_image)
 
-
 def main(image_filename):
     output_filename    = f'{os.path.splitext(os.path.basename(image_filename))[0]}_cropped.jpg'
     palette_filename   = f'{os.path.splitext(os.path.basename(image_filename))[0]}_palette.jpg'
@@ -277,7 +266,6 @@ def main(image_filename):
     # Extract the color patches from the color checker and perform color correction
     patches = analyze_color_checker(output_filename, palette_filename, debug_filename)
     map_gamut(image_filename, corrected_filename, targets, patches)
-
 
 if __name__ == '__main__':
     main('/Users/andi/Documents/PhD/stats/coral_pigmentation/test_files/a.jpg')
