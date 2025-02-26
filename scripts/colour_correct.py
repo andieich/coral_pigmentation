@@ -559,4 +559,4 @@ def main(image_filename):
 
 
 if __name__ == '__main__':
-    main('/Users/andi/Desktop/test_pigm/a.jpg')
+    main('/Users/andi/Documents/PhD/stats/coral_pigmentation/test_files/a.jpg')
