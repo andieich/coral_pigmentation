@@ -77,6 +77,13 @@ def point_select_callback(event, points):
             plt.plot(ix, iy, 'ro')
             plt.draw()
 
+def undo_last_point(event, points):
+    """ Callback for key press event to undo the last point """
+    if event.key == 'u' and points:
+        points.pop()
+        plt.gca().lines = plt.gca().lines[:-1]  # Remove the last point from the plot
+        plt.draw()
+
 
 def draw_polygon(event, points):
     """ Callback for key press event to draw the polygon around the color checker and close the interactive plot """
@@ -106,8 +113,9 @@ def annotate_color_checker(image_filename):
     # Define the mouse click event to select four corners
     plt.connect('button_press_event', lambda event: point_select_callback(event, points))
 
-    # Define the key press event
+    # Define the key press event for drawing the polygon and undoing the last point
     plt.connect('key_press_event', lambda event: draw_polygon(event, points))
+    plt.connect('key_press_event', lambda event: undo_last_point(event, points))
 
     plt.show()
 
