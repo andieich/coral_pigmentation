@@ -68,23 +68,27 @@ targets = {
           }
 
 
-def point_select_callback(event, points):
+def point_select_callback(event, points, texts):
     """ Callback for mouse click event to select four corners of the color checker """
     if plt.get_current_fig_manager().toolbar.mode == '':
         if len(points) < 4:
             ix, iy = event.xdata, event.ydata
             points.append((ix, iy))
             plt.plot(ix, iy, 'ro')
+            text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
+            texts.append(text)
             plt.draw()
 
-def undo_last_point(event, points):
+def undo_last_point(event, points, texts):
     """ Callback for key press event to undo the last point """
     if event.key == 'u' and points:
         points.pop()
         if plt.gca().lines:
             plt.gca().lines[-1].remove()  # Remove the last point from the plot
+        if texts:
+            texts[-1].remove()  # Remove the last text annotation
+            texts.pop()
         plt.draw()
-
 
 def draw_polygon(event, points):
     """ Callback for key press event to draw the polygon around the color checker and close the interactive plot """
@@ -98,10 +102,10 @@ def draw_polygon(event, points):
         plt.pause(1.0)
         plt.close()
 
-
 def annotate_color_checker(image_filename):
     """ Deskew and crop the color checker from the provided image """
     points = []
+    texts = []
 
     # Read the image
     image = cv2.imread(image_filename)
@@ -112,11 +116,11 @@ def annotate_color_checker(image_filename):
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
     # Define the mouse click event to select four corners
-    plt.connect('button_press_event', lambda event: point_select_callback(event, points))
+    plt.connect('button_press_event', lambda event: point_select_callback(event, points, texts))
 
     # Define the key press event for drawing the polygon and undoing the last point
     plt.connect('key_press_event', lambda event: draw_polygon(event, points))
-    plt.connect('key_press_event', lambda event: undo_last_point(event, points))
+    plt.connect('key_press_event', lambda event: undo_last_point(event, points, texts))
 
     plt.show()
 
