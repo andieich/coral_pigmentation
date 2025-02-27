@@ -174,3 +174,5 @@ cython_debug/
 corrected_images/
 debug/
 test_files/
+.csv
+f.csv
