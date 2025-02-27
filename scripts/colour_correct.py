@@ -256,6 +256,29 @@ def map_gamut(image_filename, output_filename, targets, patches, correction_meth
     # Perform color correction
     transformed_image = np.clip(colour.colour_correction(image, A, B, method=correction_method, degree=degree), 0, 255)
 
+
+    # White balance the image
+    factors = np.zeros(3)
+
+    wb_targets = [
+        # 'Neutral 3.5',
+        # 'Neutral 5',
+        # 'Neutral 6.5',
+        'Neutral 8',
+        'White'
+    ]
+
+    for target in wb_targets:
+        white        = np.clip(colour.colour_correction(patches[target][:3], A, B), 0, 255)
+        white_target = targets[target][:3]
+
+        factors += white_target / white
+
+    # White balance factors
+    factors /= len(wb_targets)
+
+    for i in range(3):
+        transformed_image[:, :, i] = np.clip(transformed_image[:, :, i] * factors[i], 0, 255)
     # Transform image back to BGR
     transformed_image = cv2.cvtColor(transformed_image.astype(np.uint8), cv2.COLOR_RGB2BGR)
 
