@@ -156,12 +156,10 @@ def deskew_and_crop_color_checker(image_filename, points):
 
     return color_checker
 
-def analyze_color_checker(image, palette_filename=None, debug_filename=None, method='dominant', correction_method='Finlayson 2015', degree=2):
+def analyze_color_checker(image, method='dominant', correction_method='Finlayson 2015', degree=2):
     """ Method to crop the patches for each color from the cropped color checker image
         It returns a dictionary of the average RGB values for each color patch
-        Creates debug images for the patch selection and the resulting color palette
     """
-    debug_image = image.copy()    # Create a copy of the image for debugging
 
     margin_px = int(MARGIN * RESOLUTION)  # Compute margin in pixels
 
@@ -200,43 +198,16 @@ def analyze_color_checker(image, palette_filename=None, debug_filename=None, met
             
             # Swap the values compensating for the BGR to RGB conversion
             rgb_values = rgb_values[[2, 1, 0]]
+            
             color   = colors[i * COLS + j]
-            
-            # Extend the patch horizontally to show the average RGB values
-            patch = cv2.cvtColor(patch, cv2.COLOR_BGR2RGB)
-            patch = cv2.copyMakeBorder(patch, 0, 0, 0, patch.shape[1], cv2.BORDER_CONSTANT, value=targets[color])
-            
-            # Show the patch
-            plt.subplot(ROWS, COLS, i * COLS + j + 1)
-            plt.imshow(patch)
-            plt.title(f'{color}')
-            plt.axis('off')
             
             # Store the uncorrected patch values
             patches[color] = rgb_values
-            
-            # Draw the position of the patch on the image
-            cv2.rectangle(debug_image, patch_upper_left, patch_lower_right, (0, 255, 0), 1, cv2.LINE_AA)
 
-            # Put a text label with the color name on the patch
-            cv2.putText(debug_image, colors[i * COLS + j], [p - margin_px//2 for p in patch_upper_left], cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.5, (0, 255, 0), 1)
-
-
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.85)  # Adjust for title
-    plt.suptitle('Color Checker Patches (left=actual, middle=corrected, right=target)', fontsize=13)
-    
-    if palette_filename:
-        plt.savefig(palette_filename)
-    plt.close()
-
-    # Save the debug image
-    if debug_filename:
-        cv2.imwrite(debug_filename, debug_image)
 
     return patches
 
-def map_gamut(image_filename, output_filename, targets, patches, correction_method, degree):
+def map_gamut(image_filename,output_filename, targets, patches, correction_method, degree):
     """ Method to map the color gamut of the image to the target colors """
 
     # Create the A and B matrices for the color correction
@@ -285,34 +256,31 @@ def map_gamut(image_filename, output_filename, targets, patches, correction_meth
     # Save the transformed image
     cv2.imwrite(output_filename, transformed_image)
 
-def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, method, correction_method, degree):
+def process_images(input_dir, output_dir_corrected, csv_writer, method, correction_method, degree):
     """ Process all images in the input directory and save the results to the specified output directories """
     for filename in os.listdir(input_dir):
         if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
             image_filename = os.path.join(input_dir, filename)
             output_filename = os.path.join(output_dir_corrected, f'{os.path.splitext(filename)[0]}_corrected.jpg')
-            palette_filename = os.path.join(output_dir_debug, f'{os.path.splitext(filename)[0]}_palette.jpg')
-            debug_filename = os.path.join(output_dir_debug, f'{os.path.splitext(filename)[0]}_debug.jpg')
-
+            
             # Isolate the color checker from the image
             points = annotate_color_checker(image_filename, csv_writer)
             color_checker = deskew_and_crop_color_checker(image_filename, points)
 
             # Extract the color patches from the color checker and perform color correction
-            patches = analyze_color_checker(color_checker, palette_filename, debug_filename, method, correction_method, degree)
+            patches = analyze_color_checker(color_checker, method, correction_method, degree)
             map_gamut(image_filename, output_filename, targets, patches, correction_method, degree)
 
-def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename, method, correction_method, degree):
+def main(input_dir, output_dir_corrected, csv_filename, method, correction_method, degree):
     with open(csv_filename, mode='w', newline='') as file:
         csv_writer = csv.writer(file)
         csv_writer.writerow(['image_filename', 'point_id', 'x', 'y'])
-        process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, method, correction_method, degree)
+        process_images(input_dir, output_dir_corrected, csv_writer, method, correction_method, degree)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process images for color correction.')
     parser.add_argument('--input', '-i', required=True, help='Path to the input directory')
     parser.add_argument('--output_corrected', '-oc', required=True, help='Path to the output directory for corrected images')
-    parser.add_argument('--output_debug', '-od', required=True, help='Path to the output directory for debug images')
     parser.add_argument('--csv', '-c', required=True, help='Path to the CSV file to save points')
     parser.add_argument('--method', '-m', default='dominant', choices=['mean', 'median', 'min', 'max', 'dominant'], help='Method to calculate the RGB values for each patch (default: dominant)')
     parser.add_argument('--correction_method', '-cm', default='Cheung 2004', choices=['Finlayson 2015', 'Vandermonde', 'Cheung 2004'], help='Method to use for color correction (default: Cheung 2004)')
@@ -321,4 +289,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-    main(args.input, args.output_corrected, args.output_debug, args.csv, args.method, args.correction_method, args.degree)
+    main(args.input, args.output_corrected, args.csv, args.method, args.correction_method, args.degree)
