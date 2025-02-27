@@ -156,7 +156,7 @@ def deskew_and_crop_color_checker(image_filename, points):
 
     return color_checker
 
-def analyze_color_checker(image, palette_filename=None, debug_filename=None, method='mean', k=1):
+def analyze_color_checker(image, palette_filename=None, debug_filename=None, method='dominant', correction_method='Finlayson 2015', degree=2, white_balance_target='White'):
     """ Method to crop the patches for each color from the cropped color checker image
         It returns a dictionary of the average RGB values for each color patch
         Creates debug images for the patch selection and the resulting color palette
@@ -192,7 +192,7 @@ def analyze_color_checker(image, palette_filename=None, debug_filename=None, met
                 rgb_values = np.max(patch, axis=(0, 1))
             elif method == 'dominant':
                 pixels = patch.reshape(-1, 3)
-                kmeans = KMeans(n_clusters=k)
+                kmeans = KMeans(n_clusters=1)
                 kmeans.fit(pixels)
                 rgb_values = kmeans.cluster_centers_[0]
             else:  # default to median
@@ -203,7 +203,7 @@ def analyze_color_checker(image, palette_filename=None, debug_filename=None, met
             color   = colors[i * COLS + j]
 
             # Perform color correction on the patch
-            corrected_patch = colour.colour_correction(patch, np.array([rgb_values]), np.array([targets[color]]))
+            corrected_patch = colour.colour_correction(patch, np.array([rgb_values]), np.array([targets[color]]), method=correction_method, degree=degree)
             corrected_patch = np.clip(corrected_patch, 0, 255).astype(np.uint8)
 
             # Create a target patch
@@ -238,6 +238,17 @@ def analyze_color_checker(image, palette_filename=None, debug_filename=None, met
     # Save the debug image
     if debug_filename:
         cv2.imwrite(debug_filename, debug_image)
+
+    # Perform white balancing if specified
+    if white_balance_target:
+        factors = np.zeros(3)
+        white = np.clip(colour.colour_correction(patches[white_balance_target][:3], A, B, method=correction_method, degree=degree), 0, 255)
+        white_target = targets[white_balance_target][:3]
+        factors += white_target / white
+
+        for i in range(3):
+            for color in patches:
+                patches[color][i] = np.clip(patches[color][i] * factors[i], 0, 255)
 
     return patches
 
@@ -279,7 +290,7 @@ def map_gamut(image_filename, output_filename, targets, patches, white_balance_t
     # Save the transformed image
     cv2.imwrite(output_filename, transformed_image)
 
-def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, white_balance_target, method, correction_method, degree, k):
+def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, white_balance_target, method, correction_method, degree):
     """ Process all images in the input directory and save the results to the specified output directories """
     for filename in os.listdir(input_dir):
         if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -293,14 +304,14 @@ def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer
             color_checker = deskew_and_crop_color_checker(image_filename, points)
 
             # Extract the color patches from the color checker and perform color correction
-            patches = analyze_color_checker(color_checker, palette_filename, debug_filename, method, k)
+            patches = analyze_color_checker(color_checker, palette_filename, debug_filename, method, correction_method, degree, white_balance_target)
             map_gamut(image_filename, output_filename, targets, patches, white_balance_target, correction_method, degree)
 
-def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename, white_balance_target, method, correction_method, degree, k):
+def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename, white_balance_target, method, correction_method, degree):
     with open(csv_filename, mode='w', newline='') as file:
         csv_writer = csv.writer(file)
         csv_writer.writerow(['image_filename', 'point_id', 'x', 'y'])
-        process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, white_balance_target, method, correction_method, degree, k)
+        process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, white_balance_target, method, correction_method, degree)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process images for color correction.')
@@ -309,13 +320,12 @@ if __name__ == '__main__':
     parser.add_argument('--output_debug', '-od', required=True, help='Path to the output directory for debug images')
     parser.add_argument('--csv', '-c', required=True, help='Path to the CSV file to save points')
     parser.add_argument('--white_balance', '-wb', default='White', help='Patch to use for white balancing (default: White). Use "None" to disable white balancing.')
-    parser.add_argument('--method', '-m', default='dominant', choices=['mean', 'median', 'min', 'max', 'dominant'], help='Method to calculate the RGB values for each patch (default: mean)')
+    parser.add_argument('--method', '-m', default='dominant', choices=['mean', 'median', 'min', 'max', 'dominant'], help='Method to calculate the RGB values for each patch (default: dominant)')
     parser.add_argument('--correction_method', '-cm', default='Finlayson 2015', choices=['Finlayson 2015', 'Vandermonde', 'Cheung 2004'], help='Method to use for color correction (default: Finlayson2015)')
     parser.add_argument('--degree', '-d', type=int, default=2, choices=[1, 2, 3, 4], help='Degree for the Finlayson2015 and Vandermonde methods (default: 2)')
-    parser.add_argument('--clusters', '-k', type=int, default=1, help='Number of clusters for k-means clustering (default: 1)')
 
     args = parser.parse_args()
 
     white_balance_target = None if args.white_balance.lower() == 'none' else args.white_balance
 
-    main(args.input, args.output_corrected, args.output_debug, args.csv, white_balance_target, args.method, args.correction_method, args.degree, args.clusters)
+    main(args.input, args.output_corrected, args.output_debug, args.csv, white_balance_target, args.method, args.correction_method, args.degree)
