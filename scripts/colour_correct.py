@@ -121,6 +121,10 @@ def annotate_color_checker(image_filename, csv_writer):
     plt.title('Select the four corners of the color checker, starting from the top left corner and moving clockwise!')
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
+    # Set the window to full screen
+    manager = plt.get_current_fig_manager()
+    manager.full_screen_toggle()
+
     # Define the mouse click event to select four corners
     plt.connect('button_press_event', lambda event: point_select_callback(event, points, texts, image_shape))
 
@@ -297,8 +301,8 @@ if __name__ == '__main__':
     parser.add_argument('--output_corrected', '-oc', required=True, help='Path to the output directory for corrected images')
     parser.add_argument('--output_debug', '-od', required=True, help='Path to the output directory for debug images')
     parser.add_argument('--csv', '-c', required=True, help='Path to the CSV file to save points')
-    parser.add_argument('--white_balance', '-wb', default='White', help='Patch to use for white balancing (default: Neutral 3.5). Use "None" to disable white balancing.')
-    parser.add_argument('--method', '-m', default='mean', choices=['mean', 'median', 'min', 'max'], help='Method to calculate the RGB values for each patch (default: median)')
+    parser.add_argument('--white_balance', '-wb', default='Neutral 3.5', help='Patch to use for white balancing (default: Neutral 3.5). Use "None" to disable white balancing.')
+    parser.add_argument('--method', '-m', default='median', choices=['mean', 'median', 'min', 'max'], help='Method to calculate the RGB values for each patch (default: median)')
 
     args = parser.parse_args()
 
