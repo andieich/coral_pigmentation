@@ -4,7 +4,7 @@ import colour
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-import matplotlib.backend_bases as mpl_backend
+from PyQt5.QtWidgets import QApplication, QMessageBox
 
 # Define some constants regarding the color checker
 ROWS   = 6
@@ -76,7 +76,8 @@ def draw_polygon(event, points):
     """ Callback for key press event to draw the polygon around the color checker and close the interactive plot """
     if event.key == 'enter':
         if len(points) < 4:
-            raise ValueError("Error: Less than 4 points were chosen to extract the color checker.")
+            show_error_message("Less than 4 points were chosen to extract the color checker.")
+            return
         points = np.array(points)
         polygon = Polygon(points, closed=True, fill=None, edgecolor='r', linewidth=2)
         plt.gca().add_patch(polygon)
@@ -89,7 +90,16 @@ def draw_polygon(event, points):
 def on_close(event, points):
     """ Callback for close event to check the number of points """
     if len(points) < 4:
-        raise ValueError("Error: Less than 4 points were chosen to extract the color checker.")
+        show_error_message("Less than 4 points were chosen to extract the color checker.")
+
+def show_error_message(message):
+    """ Show an error message using PyQt5 """
+    app = QApplication([])
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Critical)
+    msg.setText(message)
+    msg.setWindowTitle("Error")
+    msg.exec_()
 
 def annotate_color_checker(image_filename):
     """ Deskew and crop the color checker from the provided image """
@@ -253,19 +263,29 @@ def map_gamut(image_filename, output_filename, targets, patches):
     # Save the transformed image
     cv2.imwrite(output_filename, transformed_image)
 
-def main(image_filename):
-    output_filename    = f'{os.path.splitext(os.path.basename(image_filename))[0]}_cropped.jpg'
-    palette_filename   = f'{os.path.splitext(os.path.basename(image_filename))[0]}_palette.jpg'
-    debug_filename     = f'{os.path.splitext(os.path.basename(image_filename))[0]}_debug.jpg'
-    corrected_filename = f'{os.path.splitext(os.path.basename(image_filename))[0]}_corrected.jpg'
+def process_images(input_dir, output_dir_corrected, output_dir_debug):
+    """ Process all images in the input directory and save the results to the specified output directories """
+    for filename in os.listdir(input_dir):
+        if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+            image_filename = os.path.join(input_dir, filename)
+            output_filename = os.path.join(output_dir_corrected, f'{os.path.splitext(filename)[0]}_corrected.jpg')
+            palette_filename = os.path.join(output_dir_debug, f'{os.path.splitext(filename)[0]}_palette.jpg')
+            debug_filename = os.path.join(output_dir_debug, f'{os.path.splitext(filename)[0]}_debug.jpg')
 
-    # Isolate the color checker from the image
-    points = annotate_color_checker(image_filename)
-    deskew_and_crop_color_checker(image_filename, output_filename, points)
+            # Isolate the color checker from the image
+            points = annotate_color_checker(image_filename)
+            cropped_filename = os.path.join(output_dir_debug, f'{os.path.splitext(filename)[0]}_cropped.jpg')
+            deskew_and_crop_color_checker(image_filename, cropped_filename, points)
 
-    # Extract the color patches from the color checker and perform color correction
-    patches = analyze_color_checker(output_filename, palette_filename, debug_filename)
-    map_gamut(image_filename, corrected_filename, targets, patches)
+            # Extract the color patches from the color checker and perform color correction
+            patches = analyze_color_checker(cropped_filename, palette_filename, debug_filename)
+            map_gamut(image_filename, output_filename, targets, patches)
+
+def main(input_dir, output_dir_corrected, output_dir_debug):
+    process_images(input_dir, output_dir_corrected, output_dir_debug)
 
 if __name__ == '__main__':
-    main('/Users/andi/Documents/PhD/stats/coral_pigmentation/test_files/a.jpg')
+    input_dir = '/path/to/input/directory'
+    output_dir_corrected = '/path/to/output/directory/corrected'
+    output_dir_debug = '/path/to/output/directory/debug'
+    main(input_dir, output_dir_corrected, output_dir_debug)
