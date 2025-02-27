@@ -52,16 +52,20 @@ targets = {
             'Black':         [ 52,  52,  52],
           }
 
-def point_select_callback(event, points, texts):
+def point_select_callback(event, points, texts, image_shape):
     """ Callback for mouse click event to select four corners of the color checker """
     if plt.get_current_fig_manager().toolbar.mode == '':
         if len(points) < 4:
             ix, iy = event.xdata, event.ydata
-            points.append((ix, iy))
-            plt.plot(ix, iy, 'ro')
-            text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
-            texts.append(text)
-            plt.draw()
+            if ix is not None and iy is not None:
+                # Clip the coordinates to the image boundaries
+                ix = np.clip(ix, 0, image_shape[1] - 1)
+                iy = np.clip(iy, 0, image_shape[0] - 1)
+                points.append((ix, iy))
+                plt.plot(ix, iy, 'ro')
+                text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
+                texts.append(text)
+                plt.draw()
 
 def undo_last_point(event, points, texts):
     """ Callback for key press event to undo the last point """
@@ -110,6 +114,7 @@ def annotate_color_checker(image_filename, csv_writer):
 
     # Read the image
     image = cv2.imread(image_filename)
+    image_shape = image.shape
 
     # Display the image
     fig = plt.figure()
@@ -117,7 +122,7 @@ def annotate_color_checker(image_filename, csv_writer):
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
     # Define the mouse click event to select four corners
-    plt.connect('button_press_event', lambda event: point_select_callback(event, points, texts))
+    plt.connect('button_press_event', lambda event: point_select_callback(event, points, texts, image_shape))
 
     # Define the key press event for drawing the polygon and undoing the last point
     plt.connect('key_press_event', lambda event: draw_polygon(event, points))
@@ -219,7 +224,7 @@ def analyze_color_checker(image, palette_filename=None, debug_filename=None):
 
     return patches
 
-def map_gamut(image_filename, output_filename, targets, patches):
+def map_gamut(image_filename, output_filename, targets, patches, white_balance_target):
     """ Method to map the color gamut of the image to the target colors """
 
     # Create the A and B matrices for the color correction
@@ -238,28 +243,17 @@ def map_gamut(image_filename, output_filename, targets, patches):
 
     transformed_image = np.clip(colour.colour_correction(image, A, B), 0, 255)
 
-    # White balance the image
-    factors = np.zeros(3)
+    if white_balance_target:
+        # White balance the image
+        factors = np.zeros(3)
 
-    wb_targets = [
-        # 'Neutral 3.5',
-        # 'Neutral 5',
-        # 'Neutral 6.5',
-        'Neutral 8',
-        'White'
-    ]
-
-    for target in wb_targets:
-        white        = np.clip(colour.colour_correction(patches[target][:3], A, B), 0, 255)
-        white_target = targets[target][:3]
+        white = np.clip(colour.colour_correction(patches[white_balance_target][:3], A, B), 0, 255)
+        white_target = targets[white_balance_target][:3]
 
         factors += white_target / white
 
-    # White balance factors
-    factors /= len(wb_targets)
-
-    for i in range(3):
-        transformed_image[:, :, i] = np.clip(transformed_image[:, :, i] * factors[i], 0, 255)
+        for i in range(3):
+            transformed_image[:, :, i] = np.clip(transformed_image[:, :, i] * factors[i], 0, 255)
 
     # Transform image back to BGR
     transformed_image = cv2.cvtColor(transformed_image.astype(np.uint8), cv2.COLOR_RGB2BGR)
@@ -267,7 +261,7 @@ def map_gamut(image_filename, output_filename, targets, patches):
     # Save the transformed image
     cv2.imwrite(output_filename, transformed_image)
 
-def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer):
+def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, white_balance_target):
     """ Process all images in the input directory and save the results to the specified output directories """
     for filename in os.listdir(input_dir):
         if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -282,13 +276,13 @@ def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer
 
             # Extract the color patches from the color checker and perform color correction
             patches = analyze_color_checker(color_checker, palette_filename, debug_filename)
-            map_gamut(image_filename, output_filename, targets, patches)
+            map_gamut(image_filename, output_filename, targets, patches, white_balance_target)
 
-def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename):
+def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename, white_balance_target):
     with open(csv_filename, mode='w', newline='') as file:
         csv_writer = csv.writer(file)
         csv_writer.writerow(['image_filename', 'point_id', 'x', 'y'])
-        process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer)
+        process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, white_balance_target)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process images for color correction.')
@@ -296,7 +290,10 @@ if __name__ == '__main__':
     parser.add_argument('--output_corrected', '-oc', required=True, help='Path to the output directory for corrected images')
     parser.add_argument('--output_debug', '-od', required=True, help='Path to the output directory for debug images')
     parser.add_argument('--csv', '-c', required=True, help='Path to the CSV file to save points')
+    parser.add_argument('--white_balance', '-wb', default='Neutral 3.5', help='Patch to use for white balancing (default: Neutral 3.5). Use "None" to disable white balancing.')
 
     args = parser.parse_args()
 
-    main(args.input, args.output_corrected, args.output_debug, args.csv)
+    white_balance_target = None if args.white_balance.lower() == 'none' else args.white_balance
+
+    main(args.input, args.output_corrected, args.output_debug, args.csv, white_balance_target)
