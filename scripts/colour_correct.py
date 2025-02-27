@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from PyQt5.QtWidgets import QApplication, QMessageBox
+import argparse
 
 # Define some constants regarding the color checker
 ROWS   = 6
@@ -285,7 +286,11 @@ def main(input_dir, output_dir_corrected, output_dir_debug):
     process_images(input_dir, output_dir_corrected, output_dir_debug)
 
 if __name__ == '__main__':
-    input_dir = '/path/to/input/directory'
-    output_dir_corrected = '/path/to/output/directory/corrected'
-    output_dir_debug = '/path/to/output/directory/debug'
-    main(input_dir, output_dir_corrected, output_dir_debug)
+    parser = argparse.ArgumentParser(description='Process images for color correction.')
+    parser.add_argument('--input', '-i', required=True, help='Path to the input directory')
+    parser.add_argument('--output_corrected', '-oc', required=True, help='Path to the output directory for corrected images')
+    parser.add_argument('--output_debug', '-od', required=True, help='Path to the output directory for debug images')
+
+    args = parser.parse_args()
+
+    main(args.input, args.output_corrected, args.output_debug)
