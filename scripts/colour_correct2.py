@@ -1,112 +1,48 @@
 import os
 import cv2
-import colour
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
-from PyQt5.QtWidgets import QApplication, QMessageBox
 import argparse
 import csv
+import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 
-# Define some constants regarding the color checker
-ROWS   = 6
-COLS   = 4
-MARGIN = 0.06  # 6% margin/border around the color patches
-
-# Resample the color checker to a fixed resolution
-RESOLUTION = 600
-
-# Colors in the order of the color checker patches if annotated starting from the top left corner and moving clockwise
-colors = ['Bluish Green', 'Orange Yellow', 'Cyan', 'Black',         # Row 1
-          'Blue Flower', 'Yellow Green', 'Magenta', 'Neutral 3.5',  # Row 2
-          'Foliage', 'Purple', 'Yellow', 'Neutral 5',               # Row 3
-          'Blue Sky', 'Moderate Red', 'Red', 'Neutral 6.5',         # Row 4
-          'Light Skin', 'Purplish Blue', 'Green', 'Neutral 8',      # Row 5
-          'Dark Skin', 'Orange', 'Blue', 'White']                   # Row 6
-
-# Define targets in RGB format (from the X-Rite Classic color checker documentation)
-targets =   {
-            'Dark Skin':     [115,  82,  68],
-            'Light Skin':    [194, 150, 130],
-            'Blue Sky':      [ 98, 122, 157],
-            'Foliage':       [ 87, 108,  67],
-            'Blue Flower':   [133, 128, 177],
-            'Bluish Green':  [103, 189, 170],
-            'Orange':        [214, 126,  44],
-            'Purplish Blue': [ 80,  91, 166],
-            'Moderate Red':  [193,  90,  99],
-            'Purple':        [ 94,  60, 108],
-            'Yellow Green':  [157, 188,  64],
-            'Orange Yellow': [224, 163,  46],
-            'Blue':          [ 56,  61, 150],
-            'Green':         [ 70, 148,  73],
-            'Red':           [175,  54,  60],
-            'Yellow':        [231, 199,  31],
-            'Magenta':       [187,  86, 149],
-            'Cyan':          [  8, 133, 161],
-            'White':         [243, 243, 242],
-            'Neutral 8':     [200, 200, 200],
-            'Neutral 6.5':   [160, 160, 160],
-            'Neutral 5':     [122, 122, 121],
-            'Neutral 3.5':   [ 85,  85,  85],
-            'Black':         [ 52,  52,  52],
-            }
+# Define constants
+ROWS = 6
+COLS = 4
+RESOLUTION = 300
+MARGIN = 0.1
 
 def point_select_callback(event, points, texts, image_shape):
-    """ Callback for mouse click event to select four corners of the color checker """
-    if plt.get_current_fig_manager().toolbar.mode == '':
+    """Callback function to handle mouse click events for selecting points."""
+    if event.inaxes:
+        x, y = int(event.xdata), int(event.ydata)
         if len(points) < 4:
-            ix, iy = event.xdata, event.ydata
-            if ix is not None and iy is not None:
-                # Clip the coordinates to the image boundaries
-                ix = np.clip(ix, 0, image_shape[1] - 1)
-                iy = np.clip(iy, 0, image_shape[0] - 1)
-                points.append((ix, iy))
-                plt.plot(ix, iy, 'ro')
-                text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
-                texts.append(text)
-                plt.draw()
-
-def undo_last_point(event, points, texts):
-    """ Callback for key press event to undo the last point """
-    if event.key == 'u' and points:
-        points.pop()
-        if plt.gca().lines:
-            plt.gca().lines[-1].remove()  # Remove the last point from the plot
-        if texts:
-            texts[-1].remove()  # Remove the last text annotation
-            texts.pop()
-        plt.draw()
+            points.append((x, y))
+            text = plt.text(x, y, f'{len(points)}', color='red', fontsize=12)
+            texts.append(text)
+            plt.scatter(x, y, color='red')
+            plt.draw()
 
 def draw_polygon(event, points):
-    """ Callback for key press event to draw the polygon around the color checker and close the interactive plot """
-    if event.key == 'enter':
-        if len(points) < 4:
-            show_error_message("Less than 4 points were chosen to extract the color checker.")
-            return
-        points = np.array(points)
-        polygon = Polygon(points, closed=True, fill=None, edgecolor='r', linewidth=2)
+    """Draw polygon connecting the selected points."""
+    if event.key == 'enter' and len(points) == 4:
+        polygon = plt.Polygon(points, closed=True, fill=None, edgecolor='red')
         plt.gca().add_patch(polygon)
         plt.draw()
 
-        # Wait for the plot to update
-        plt.pause(1.0)
-        plt.close()
+def undo_last_point(event, points, texts):
+    """Undo the last selected point."""
+    if event.key == 'backspace' and points:
+        points.pop()
+        text = texts.pop()
+        text.remove()
+        plt.gca().lines = plt.gca().lines[:-1]
+        plt.draw()
 
 def on_close(event, points):
-    """ Callback for close event to check the number of points """
-    if len(points) < 4:
-        show_error_message("Less than 4 points were chosen to extract the color checker.")
-
-def show_error_message(message):
-    """ Show an error message using PyQt5 """
-    app = QApplication([])
-    msg = QMessageBox()
-    msg.setIcon(QMessageBox.Critical)
-    msg.setText(message)
-    msg.setWindowTitle("Error")
-    msg.exec_()
+    """Check the number of points on close event."""
+    if len(points) != 4:
+        raise ValueError("Four points must be selected.")
 
 def annotate_color_checker(image_filename, csv_writer):
     """ Deskew and crop the color checker from the provided image """
@@ -140,7 +76,7 @@ def annotate_color_checker(image_filename, csv_writer):
 
     # Write points to CSV
     for i, (x, y) in enumerate(points):
-        csv_writer.writerow([image_filename, i + 1, x, y])
+        csv_writer.writerow([image_filename, i, x, y])
 
     return points
 
@@ -164,8 +100,6 @@ def analyze_color_checker(image, method='dominant', correction_method='Finlayson
     margin_px = int(MARGIN * RESOLUTION)  # Compute margin in pixels
 
     patches = {}  # Dictionary to store the average RGB values for each color patch
-    patch_positions = {}  # Dictionary to store the positions of each color patch
-
 
     plt.subplots(ROWS, COLS)
 
@@ -192,25 +126,61 @@ def analyze_color_checker(image, method='dominant', correction_method='Finlayson
                 rgb_values = np.max(patch, axis=(0, 1))
             elif method == 'dominant':
                 pixels = patch.reshape(-1, 3)
-                kmeans = KMeans(n_clusters=1)
-                kmeans.fit(pixels)
+                kmeans = KMeans(n_clusters=1).fit(pixels)
                 rgb_values = kmeans.cluster_centers_[0]
-            else:  # default to median
-                rgb_values = np.median(patch, axis=(0, 1))
-            
+            else:
+                raise ValueError(f"Unknown method: {method}")
+
             # Swap the values compensating for the BGR to RGB conversion
             rgb_values = rgb_values[[2, 1, 0]]
             
-            color   = colors[i * COLS + j]
+            color = f'Patch {i * COLS + j + 1}'
             
             # Store the uncorrected patch values
             patches[color] = rgb_values
-            patch_positions[color] = (patch_upper_left, patch_lower_right)
 
+    return patches
 
-    return patches, patch_positions
+def add_annotations(warped, patch_fraction, reference_values):
+    """ Add annotations to the color checker image """
+    # Ensure the image is a NumPy array
+    if not isinstance(warped, np.ndarray):
+        raise ValueError("The 'warped' image must be a NumPy array")
 
-def map_gamut(image_filename, output_filename, targets, patches, patch_positions, correction_method, degree, points, output_debug):
+    # Ensure the image is in the correct data type
+    if warped.dtype != np.uint8:
+        warped = warped.astype(np.uint8)
+
+    # Define the grid size (e.g., 6x4 for a standard color chart)
+    grid_size = (6, 4)
+    h, w = warped.shape[:2]
+    patch_height = h // grid_size[1]
+    patch_width = w // grid_size[0]
+    
+    for i in range(grid_size[1]):
+        for j in range(grid_size[0]):
+            x_start = j * patch_width
+            y_start = i * patch_height
+            x_end = x_start + patch_width
+            y_end = y_start + patch_height
+            
+            # Calculate the center portion of the patch
+            x_center_start = int(x_start + (1 - patch_fraction) / 2 * patch_width)
+            y_center_start = int(y_start + (1 - patch_fraction) / 2 * patch_height)
+            x_center_end = int(x_end - (1 - patch_fraction) / 2 * patch_width)
+            y_center_end = int(y_end - (1 - patch_fraction) / 2 * patch_height)
+            
+            # Draw the center portion rectangle
+            cv2.rectangle(warped, (x_center_start, y_center_start), (x_center_end, y_center_end), (0, 242, 0), 1)
+                
+            # Fill half of the patch with the reference color
+            ref_color = reference_values[i * grid_size[0] + j]
+            ref_color_bgr = (int(ref_color[2]), int(ref_color[1]), int(ref_color[0]))  # Convert RGB to BGR
+            cv2.rectangle(warped, (x_center_start, y_center_start), (x_center_start + (x_center_end - x_center_start) // 2, y_center_end), ref_color_bgr, -1)
+    
+    return warped
+
+def map_gamut(image_filename, output_filename, targets, patches, correction_method, degree, output_debug):
     """ Method to map the color gamut of the image to the target colors and save the corrected patches alongside the target colors """
 
     # Create the A and B matrices for the color correction
@@ -229,7 +199,7 @@ def map_gamut(image_filename, output_filename, targets, patches, patch_positions
 
     # Perform color correction
     transformed_image = np.clip(colour.colour_correction(image, A, B, method=correction_method, degree=degree), 0, 255)
-    
+
     # White balance the image
     factors = np.zeros(3)
 
@@ -239,7 +209,7 @@ def map_gamut(image_filename, output_filename, targets, patches, patch_positions
     ]
 
     for target in wb_targets:
-        white = np.clip(colour.colour_correction(patches[target][:3], A, B, method=correction_method, degree=degree), 0, 255)
+        white = np.clip(colour.colour_correction(patches[target][:3], A, B), 0, 255)
         white_target = targets[target][:3]
 
         factors += white_target / white
@@ -249,50 +219,41 @@ def map_gamut(image_filename, output_filename, targets, patches, patch_positions
 
     for i in range(3):
         transformed_image[:, :, i] = np.clip(transformed_image[:, :, i] * factors[i], 0, 255)
-        
     # Transform image back to BGR
     transformed_image = cv2.cvtColor(transformed_image.astype(np.uint8), cv2.COLOR_RGB2BGR)
 
     # Save the transformed image
     cv2.imwrite(output_filename, transformed_image)
 
-    # Crop and de-warp the color checker from the corrected image
-    corrected_color_checker = deskew_and_crop_color_checker(output_filename, points)
-    
+    # Extract the corrected colors from the patches
+    corrected_patches = {}
+    for color, rgb_values in patches.items():
+        corrected_rgb = np.clip(colour.colour_correction(rgb_values, A, B), 0, 255)
+        corrected_patches[color] = corrected_rgb
 
-    # Rotate the dewarped color checker by 90 degrees
-    corrected_color_checker = cv2.rotate(corrected_color_checker, cv2.ROTATE_90_CLOCKWISE)
-
-    # Annotate the corrected color checker with the target colors
-    patch_height = RESOLUTION // ROWS
-    patch_width = RESOLUTION // COLS
-    margin_px = int(MARGIN * patch_height)
+    # Create an image to display the corrected colors alongside the target colors
+    patch_size = 50
+    comparison_image = np.zeros((patch_size * ROWS, patch_size * COLS * 2, 3), dtype=np.uint8)
 
     for i in range(ROWS):
         for j in range(COLS):
-            color = colors[i * COLS + (COLS - 1 - j)]  # Reverse the column index
+            color = f'Patch {i * COLS + j + 1}'
             target_rgb = targets[color]
-            target_bgr = (int(target_rgb[2]), int(target_rgb[1]), int(target_rgb[0]))  # Convert RGB to BGR
+            corrected_rgb = corrected_patches[color]
 
-            # Calculate the center portion of the patch
-            x_start = j * patch_width + margin_px
-            y_start = i * patch_height + margin_px
-            x_end = (j + 1) * patch_width - margin_px
-            y_end = (i + 1) * patch_height - margin_px
+            target_patch = np.full((patch_size, patch_size, 3), target_rgb, dtype=np.uint8)
+            corrected_patch = np.full((patch_size, patch_size, 3), corrected_rgb, dtype=np.uint8)
 
-            # Calculate the smaller rectangle for the target color
-            target_x_start = x_start + (x_end - x_start) // 4
-            target_y_start = y_start + (y_end - y_start) // 4
-            target_x_end = target_x_start + (x_end - x_start) // 2
-            target_y_end = target_y_start + (y_end - y_start) // 2
+            comparison_image[i * patch_size:(i + 1) * patch_size, j * patch_size:(j + 1) * patch_size, :] = target_patch
+            comparison_image[i * patch_size:(i + 1) * patch_size, (j + COLS) * patch_size:(j + COLS + 1) * patch_size, :] = corrected_patch
 
-            # Fill a small fraction of the patch with the target color
-            cv2.rectangle(corrected_color_checker, (target_x_start, target_y_start), (target_x_end, target_y_end), target_bgr, -1)
+            # Add color names
+            cv2.putText(comparison_image, color, (j * patch_size + 5, i * patch_size + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(comparison_image, color, ((j + COLS) * patch_size + 5, i * patch_size + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
 
-  
-    # Save the cropped and de-warped color checker
-    color_checker_filename = os.path.join(output_debug, f'{os.path.splitext(os.path.basename(output_filename))[0]}_color_checker.jpg')
-    cv2.imwrite(color_checker_filename, corrected_color_checker)
+    # Save the comparison image in the output_debug folder
+    comparison_filename = os.path.join(output_debug, f'{os.path.splitext(os.path.basename(output_filename))[0]}_comparison.jpg')
+    cv2.imwrite(comparison_filename, comparison_image)
 
 def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, method, correction_method, degree):
     """ Process all images in the input directory and save the results to the specified output directories """
@@ -306,8 +267,8 @@ def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer
             color_checker = deskew_and_crop_color_checker(image_filename, points)
 
             # Extract the color patches from the color checker and perform color correction
-            patches, patch_positions = analyze_color_checker(color_checker, method, correction_method, degree)
-            map_gamut(image_filename, output_filename, targets, patches, patch_positions, correction_method, degree, points, output_dir_debug)
+            patches = analyze_color_checker(color_checker, method, correction_method, degree)
+            map_gamut(image_filename, output_filename, targets, patches, correction_method, degree, output_dir_debug)
 
 def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename, method, correction_method, degree):
     with open(csv_filename, mode='w', newline='') as file:
@@ -323,7 +284,7 @@ if __name__ == '__main__':
     parser.add_argument('--csv', '-c', required=True, help='Path to the CSV file to save points')
     parser.add_argument('--method', '-m', default='dominant', choices=['mean', 'median', 'min', 'max', 'dominant'], help='Method to calculate the RGB values for each patch (default: dominant)')
     parser.add_argument('--correction_method', '-cm', default='Cheung 2004', choices=['Finlayson 2015', 'Vandermonde', 'Cheung 2004'], help='Method to use for color correction (default: Cheung 2004)')
-    parser.add_argument('--degree', '-d', type=int, default=2, choices=[1, 2, 3, 4], help='Degree for the Finlayson 2015 and Vandermonde methods (default: 2)')
+    parser.add_argument('--degree', '-d', type=int, default=2, choices=[1, 2, 3, 4], help='Degree for the Finlayson2015 and Vandermonde methods (default: 2)')
 
     args = parser.parse_args()
 
