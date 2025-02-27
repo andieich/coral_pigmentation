@@ -155,7 +155,7 @@ def deskew_and_crop_color_checker(image_filename, points):
 
     return color_checker
 
-def analyze_color_checker(image, palette_filename=None, debug_filename=None, method='median'):
+def analyze_color_checker(image, palette_filename=None, debug_filename=None, method='mean'):
     """ Method to crop the patches for each color from the cropped color checker image
         It returns a dictionary of the average RGB values for each color patch
         Creates debug images for the patch selection and the resulting color palette
@@ -301,8 +301,8 @@ if __name__ == '__main__':
     parser.add_argument('--output_corrected', '-oc', required=True, help='Path to the output directory for corrected images')
     parser.add_argument('--output_debug', '-od', required=True, help='Path to the output directory for debug images')
     parser.add_argument('--csv', '-c', required=True, help='Path to the CSV file to save points')
-    parser.add_argument('--white_balance', '-wb', default='Neutral 3.5', help='Patch to use for white balancing (default: Neutral 3.5). Use "None" to disable white balancing.')
-    parser.add_argument('--method', '-m', default='median', choices=['mean', 'median', 'min', 'max'], help='Method to calculate the RGB values for each patch (default: median)')
+    parser.add_argument('--white_balance', '-wb', default='White', help='Patch to use for white balancing (default: White). Use "None" to disable white balancing.')
+    parser.add_argument('--method', '-m', default='mean', choices=['mean', 'median', 'min', 'max'], help='Method to calculate the RGB values for each patch (default: mean)')
 
     args = parser.parse_args()
 
