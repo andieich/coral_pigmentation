@@ -129,7 +129,7 @@ def annotate_color_checker(image_filename):
 
     return points
 
-def deskew_and_crop_color_checker(image_filename, output_filename, points):
+def deskew_and_crop_color_checker(image_filename, points):
     """ Deskew and crop the color checker from the provided image """
     image = cv2.imread(image_filename)  # Read the image
 
@@ -139,15 +139,13 @@ def deskew_and_crop_color_checker(image_filename, output_filename, points):
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
     color_checker = cv2.warpPerspective(image, M, (RESOLUTION, RESOLUTION))
 
-    # Save the color checker
-    cv2.imwrite(output_filename, color_checker)
+    return color_checker
 
-def analyze_color_checker(filename, palette_filename=None, debug_filename=None):
+def analyze_color_checker(image, palette_filename=None, debug_filename=None):
     """ Method to crop the patches for each color from the cropped color checker image
         It returns a dictionary of the average RGB values for each color patch
         Creates debug images for the patch selection and the resulting color palette
     """
-    image = cv2.imread(filename)  # Read the image
     debug_image = image.copy()    # Create a copy of the image for debugging
 
     margin_px = int(MARGIN * RESOLUTION)  # Compute margin in pixels
@@ -275,11 +273,10 @@ def process_images(input_dir, output_dir_corrected, output_dir_debug):
 
             # Isolate the color checker from the image
             points = annotate_color_checker(image_filename)
-            cropped_filename = os.path.join(output_dir_debug, f'{os.path.splitext(filename)[0]}_cropped.jpg')
-            deskew_and_crop_color_checker(image_filename, cropped_filename, points)
+            color_checker = deskew_and_crop_color_checker(image_filename, points)
 
             # Extract the color patches from the color checker and perform color correction
-            patches = analyze_color_checker(cropped_filename, palette_filename, debug_filename)
+            patches = analyze_color_checker(color_checker, palette_filename, debug_filename)
             map_gamut(image_filename, output_filename, targets, patches)
 
 def main(input_dir, output_dir_corrected, output_dir_debug):
