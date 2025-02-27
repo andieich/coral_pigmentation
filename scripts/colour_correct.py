@@ -26,7 +26,7 @@ colors = ['Bluish Green', 'Orange Yellow', 'Cyan', 'Black',         # Row 1
           'Dark Skin', 'Orange', 'Blue', 'White']                   # Row 6
 
 # Define targets in RGB format (from the X-Rite Classic color checker documentation)
-targets = {
+targets =   {
             'Dark Skin':     [115,  82,  68],
             'Light Skin':    [194, 150, 130],
             'Blue Sky':      [ 98, 122, 157],
@@ -51,7 +51,7 @@ targets = {
             'Neutral 5':     [122, 122, 121],
             'Neutral 3.5':   [ 85,  85,  85],
             'Black':         [ 52,  52,  52],
-          }
+            }
 
 def point_select_callback(event, points, texts, image_shape):
     """ Callback for mouse click event to select four corners of the color checker """
@@ -202,6 +202,9 @@ def analyze_color_checker(image, palette_filename=None, debug_filename=None, met
             rgb_values = rgb_values[[2, 1, 0]]
             color   = colors[i * COLS + j]
 
+            # Store the uncorrected patch values
+            patches[color] = rgb_values
+
             # Perform color correction on the patch
             corrected_patch = colour.colour_correction(patch, np.array([rgb_values]), np.array([targets[color]]), method=correction_method, degree=degree)
             corrected_patch = np.clip(corrected_patch, 0, 255).astype(np.uint8)
@@ -220,8 +223,6 @@ def analyze_color_checker(image, palette_filename=None, debug_filename=None, met
             plt.title(f'{color}')
             plt.axis('off')
 
-            patches[color] = rgb_values
-
             # Draw the position of the patch on the image
             cv2.rectangle(debug_image, patch_upper_left, patch_lower_right, (0, 255, 0), 1, cv2.LINE_AA)
 
@@ -230,25 +231,33 @@ def analyze_color_checker(image, palette_filename=None, debug_filename=None, met
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)  # Adjust for title
-    plt.suptitle('Color Checker Patches (left=actual, middle=corrected, right=target)', fontsize=16)
+    plt.suptitle('Color Checker Patches (left=actual, middle=corrected, right=target)', fontsize=13)
     if palette_filename:
+        # Apply white balancing to the entire image for the palette
+        if white_balance_target:
+            # Create the A and B matrices for the color correction
+            A = np.zeros((len(targets), 3))
+            B = np.zeros((len(targets), 3))
+            for j, (color, target_rgb) in enumerate(targets.items()):
+                if color in patches:
+                    A[j] = patches[color][:3]
+                    B[j] = target_rgb[:3]
+
+            factors = np.zeros(3)
+            white = np.clip(colour.colour_correction(patches[white_balance_target][:3], A, B, method=correction_method, degree=degree), 0, 255)
+            white_target = targets[white_balance_target][:3]
+            factors += white_target / white
+
+            for i in range(3):
+                image[:, :, i] = np.clip(image[:, :, i] * factors[i], 0, 255)
+
+        plt.imshow(cv2.cvtColor(image.astype(np.uint8), cv2.COLOR_BGR2RGB))
         plt.savefig(palette_filename)
     plt.close()
 
     # Save the debug image
     if debug_filename:
         cv2.imwrite(debug_filename, debug_image)
-
-    # Perform white balancing if specified
-    if white_balance_target:
-        factors = np.zeros(3)
-        white = np.clip(colour.colour_correction(patches[white_balance_target][:3], A, B, method=correction_method, degree=degree), 0, 255)
-        white_target = targets[white_balance_target][:3]
-        factors += white_target / white
-
-        for i in range(3):
-            for color in patches:
-                patches[color][i] = np.clip(patches[color][i] * factors[i], 0, 255)
 
     return patches
 
