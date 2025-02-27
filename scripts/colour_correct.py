@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from PyQt5.QtWidgets import QApplication, QMessageBox
 import argparse
+import csv
 
 # Define some constants regarding the color checker
 ROWS   = 6
@@ -102,7 +103,7 @@ def show_error_message(message):
     msg.setWindowTitle("Error")
     msg.exec_()
 
-def annotate_color_checker(image_filename):
+def annotate_color_checker(image_filename, csv_writer):
     """ Deskew and crop the color checker from the provided image """
     points = []
     texts = []
@@ -126,6 +127,10 @@ def annotate_color_checker(image_filename):
     fig.canvas.mpl_connect('close_event', lambda event: on_close(event, points))
 
     plt.show()
+
+    # Write points to CSV
+    for i, (x, y) in enumerate(points):
+        csv_writer.writerow([image_filename, i + 1, x, y])
 
     return points
 
@@ -262,7 +267,7 @@ def map_gamut(image_filename, output_filename, targets, patches):
     # Save the transformed image
     cv2.imwrite(output_filename, transformed_image)
 
-def process_images(input_dir, output_dir_corrected, output_dir_debug):
+def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer):
     """ Process all images in the input directory and save the results to the specified output directories """
     for filename in os.listdir(input_dir):
         if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -272,22 +277,26 @@ def process_images(input_dir, output_dir_corrected, output_dir_debug):
             debug_filename = os.path.join(output_dir_debug, f'{os.path.splitext(filename)[0]}_debug.jpg')
 
             # Isolate the color checker from the image
-            points = annotate_color_checker(image_filename)
+            points = annotate_color_checker(image_filename, csv_writer)
             color_checker = deskew_and_crop_color_checker(image_filename, points)
 
             # Extract the color patches from the color checker and perform color correction
             patches = analyze_color_checker(color_checker, palette_filename, debug_filename)
             map_gamut(image_filename, output_filename, targets, patches)
 
-def main(input_dir, output_dir_corrected, output_dir_debug):
-    process_images(input_dir, output_dir_corrected, output_dir_debug)
+def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename):
+    with open(csv_filename, mode='w', newline='') as file:
+        csv_writer = csv.writer(file)
+        csv_writer.writerow(['image_filename', 'point_id', 'x', 'y'])
+        process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process images for color correction.')
     parser.add_argument('--input', '-i', required=True, help='Path to the input directory')
     parser.add_argument('--output_corrected', '-oc', required=True, help='Path to the output directory for corrected images')
     parser.add_argument('--output_debug', '-od', required=True, help='Path to the output directory for debug images')
+    parser.add_argument('--csv', '-c', required=True, help='Path to the CSV file to save points')
 
     args = parser.parse_args()
 
-    main(args.input, args.output_corrected, args.output_debug)
+    main(args.input, args.output_corrected, args.output_debug, args.csv)
