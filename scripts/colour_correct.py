@@ -1,4 +1,5 @@
 import os
+os.environ['QT_MAC_WANTS_LAYER'] = '1'
 import cv2
 import colour
 import numpy as np
@@ -314,11 +315,18 @@ def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename, method
     os.makedirs(output_dir_corrected, exist_ok=True)
     os.makedirs(output_dir_debug, exist_ok=True)
 
-    with open(csv_filename, mode='w', newline='') as file:
-        csv_writer = csv.writer(file)
-        csv_writer.writerow(['image_filename', 'point_id', 'x', 'y'])
-        process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, method, correction_method, degree)
+    # Check if the CSV file exists
+    file_exists = os.path.isfile(csv_filename)
 
+    with open(csv_filename, mode='a', newline='') as file:
+        csv_writer = csv.writer(file)
+        # Write the header only if the file is being created
+        if not file_exists:
+            csv_writer.writerow(['image_filename', 'point_id', 'x', 'y'])
+        process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer, method, correction_method, degree)
+        
+        
+        
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process images for color correction.')
     parser.add_argument('--input', '-i', required=True, help='Path to the input directory')
