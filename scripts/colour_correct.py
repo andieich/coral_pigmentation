@@ -53,20 +53,16 @@ targets =   {
             'Black':         [ 52,  52,  52],
             }
 
-def point_select_callback(event, points, texts, image_shape):
+
+def point_select_callback(event, points, texts):
     """ Callback for mouse click event to select four corners of the color checker """
-    if plt.get_current_fig_manager().toolbar.mode == '':
-        if len(points) < 4:
-            ix, iy = event.xdata, event.ydata
-            if ix is not None and iy is not None:
-                # Clip the coordinates to the image boundaries
-                ix = np.clip(ix, 0, image_shape[1] - 1)
-                iy = np.clip(iy, 0, image_shape[0] - 1)
-                points.append((ix, iy))
-                plt.plot(ix, iy, 'ro')
-                text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
-                texts.append(text)
-                plt.draw()
+    if len(points) < 4:
+        ix, iy = event.xdata, event.ydata
+        points.append((ix, iy))
+        plt.plot(ix, iy, 'ro')
+        text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
+        texts.append(text)
+        plt.draw()
 
 def undo_last_point(event, points, texts):
     """ Callback for key press event to undo the last point """
@@ -115,7 +111,6 @@ def annotate_color_checker(image_filename, csv_writer):
 
     # Read the image
     image = cv2.imread(image_filename)
-    image_shape = image.shape
 
     # Display the image
     fig = plt.figure()
@@ -123,11 +118,11 @@ def annotate_color_checker(image_filename, csv_writer):
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
     # Set the window to full screen
-    manager = plt.get_current_fig_manager()
-    manager.full_screen_toggle()
+    #manager = plt.get_current_fig_manager()
+    #manager.full_screen_toggle()
 
     # Define the mouse click event to select four corners
-    plt.connect('button_press_event', lambda event: point_select_callback(event, points, texts, image_shape))
+    plt.connect('button_press_event', lambda event: point_select_callback(event, points, texts))
 
     # Define the key press event for drawing the polygon and undoing the last point
     plt.connect('key_press_event', lambda event: draw_polygon(event, points))
@@ -138,9 +133,12 @@ def annotate_color_checker(image_filename, csv_writer):
 
     plt.show()
 
+
     # Write points to CSV
     for i, (x, y) in enumerate(points):
         csv_writer.writerow([image_filename, i + 1, x, y])
+
+    plt.close()  # Close the figure window
 
     return points
 
@@ -165,9 +163,6 @@ def analyze_color_checker(image, method='dominant', correction_method='Finlayson
 
     patches = {}  # Dictionary to store the average RGB values for each color patch
     patch_positions = {}  # Dictionary to store the positions of each color patch
-
-
-    plt.subplots(ROWS, COLS)
 
     # Crop the patches for each color from the cropped color checker image
     # + There are ROWS x COLS colors in the color checker
@@ -258,7 +253,6 @@ def map_gamut(image_filename, output_filename, targets, patches, patch_positions
 
     # Crop and de-warp the color checker from the corrected image
     corrected_color_checker = deskew_and_crop_color_checker(output_filename, points)
-    
 
     # Rotate the dewarped color checker by 90 degrees
     corrected_color_checker = cv2.rotate(corrected_color_checker, cv2.ROTATE_90_CLOCKWISE)
@@ -289,7 +283,6 @@ def map_gamut(image_filename, output_filename, targets, patches, patch_positions
             # Fill a small fraction of the patch with the target color
             cv2.rectangle(corrected_color_checker, (target_x_start, target_y_start), (target_x_end, target_y_end), target_bgr, -1)
 
-  
     # Save the cropped and de-warped color checker
     color_checker_filename = os.path.join(output_debug, f'{os.path.splitext(os.path.basename(output_filename))[0]}_color_checker.jpg')
     cv2.imwrite(color_checker_filename, corrected_color_checker)
