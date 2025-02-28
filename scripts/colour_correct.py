@@ -120,8 +120,8 @@ def annotate_color_checker(image_filename, csv_writer):
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
     # Set the window to full screen
-    #manager = plt.get_current_fig_manager()
-    #manager.full_screen_toggle()
+    manager = plt.get_current_fig_manager()
+    manager.full_screen_toggle()
 
     # Define the mouse click event to select four corners
     plt.connect('button_press_event', lambda event: point_select_callback(event, points, texts))
