@@ -350,7 +350,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_corrected', '-oc', default='./corrected_images', help='Path to the output directory for corrected images (default: ./corrected_images)')
     parser.add_argument('--output_debug', '-od', default='./debugging_images', help='Path to the output directory for debug images (default: ./debugging_images)')
     parser.add_argument('--csv', '-c', default=datetime.now().strftime('%Y_%m_%d_colourchart_positions.csv'), help='Path to the CSV file to save points (default: YYYY_MM_DD_colourchart_positions.csv)')
-    parser.add_argument('--method', '-m', default='mean', choices=['mean', 'median', 'min', 'max', 'dominant'], help='Method to calculate the RGB values for each patch (default: dominant)')
+    parser.add_argument('--method', '-m', default='dominant', choices=['mean', 'median', 'min', 'max', 'dominant'], help='Method to calculate the RGB values for each patch (default: dominant)')
     parser.add_argument('--correction_method', '-cm', default='Cheung 2004', choices=['Finlayson 2015', 'Vandermonde', 'Cheung 2004'], help='Method to use for color correction (default: Cheung 2004)')
     parser.add_argument('--degree', '-d', type=int, default=1, choices=[1, 2, 3, 4], help='Degree for the Finlayson 2015 and Vandermonde methods (default: 1)')
 
