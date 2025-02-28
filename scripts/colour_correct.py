@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 import argparse
 import csv
 from sklearn.cluster import KMeans
+from datetime import datetime
 
 # Define some constants regarding the color checker
 ROWS   = 6
@@ -56,13 +57,14 @@ targets =   {
 
 def point_select_callback(event, points, texts):
     """ Callback for mouse click event to select four corners of the color checker """
-    if len(points) < 4:
-        ix, iy = event.xdata, event.ydata
-        points.append((ix, iy))
-        plt.plot(ix, iy, 'ro')
-        text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
-        texts.append(text)
-        plt.draw()
+    if plt.get_current_fig_manager().toolbar.mode == '':
+        if len(points) < 4:
+            ix, iy = event.xdata, event.ydata
+            points.append((ix, iy))
+            plt.plot(ix, iy, 'ro')
+            text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
+            texts.append(text)
+            plt.draw()
 
 def undo_last_point(event, points, texts):
     """ Callback for key press event to undo the last point """
@@ -294,6 +296,11 @@ def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer
             image_filename = os.path.join(input_dir, filename)
             output_filename = os.path.join(output_dir_corrected, f'{os.path.splitext(filename)[0]}_corrected.jpg')
             
+            # Check if the output file already exists
+            if os.path.exists(output_filename):
+                print(f"Skipping {filename} as it has already been processed.")
+                continue
+            
             # Isolate the color checker from the image
             points = annotate_color_checker(image_filename, csv_writer)
             color_checker = deskew_and_crop_color_checker(image_filename, points)
@@ -303,6 +310,10 @@ def process_images(input_dir, output_dir_corrected, output_dir_debug, csv_writer
             map_gamut(image_filename, output_filename, targets, patches, patch_positions, correction_method, degree, points, output_dir_debug)
 
 def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename, method, correction_method, degree):
+    # Create output directories if they don't exist
+    os.makedirs(output_dir_corrected, exist_ok=True)
+    os.makedirs(output_dir_debug, exist_ok=True)
+
     with open(csv_filename, mode='w', newline='') as file:
         csv_writer = csv.writer(file)
         csv_writer.writerow(['image_filename', 'point_id', 'x', 'y'])
@@ -311,9 +322,9 @@ def main(input_dir, output_dir_corrected, output_dir_debug, csv_filename, method
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process images for color correction.')
     parser.add_argument('--input', '-i', required=True, help='Path to the input directory')
-    parser.add_argument('--output_corrected', '-oc', required=True, help='Path to the output directory for corrected images')
-    parser.add_argument('--output_debug', '-od', required=True, help='Path to the output directory for debug images')
-    parser.add_argument('--csv', '-c', required=True, help='Path to the CSV file to save points')
+    parser.add_argument('--output_corrected', '-oc', default='./corrected_images', help='Path to the output directory for corrected images (default: ./corrected_images)')
+    parser.add_argument('--output_debug', '-od', default='./debugging_images', help='Path to the output directory for debug images (default: ./debugging_images)')
+    parser.add_argument('--csv', '-c', default=datetime.now().strftime('%Y_%m_%d_colourchart_positions.csv'), help='Path to the CSV file to save points (default: YYYY_MM_DD_colourchart_positions.csv)')
     parser.add_argument('--method', '-m', default='dominant', choices=['mean', 'median', 'min', 'max', 'dominant'], help='Method to calculate the RGB values for each patch (default: dominant)')
     parser.add_argument('--correction_method', '-cm', default='Cheung 2004', choices=['Finlayson 2015', 'Vandermonde', 'Cheung 2004'], help='Method to use for color correction (default: Cheung 2004)')
     parser.add_argument('--degree', '-d', type=int, default=2, choices=[1, 2, 3, 4], help='Degree for the Finlayson 2015 and Vandermonde methods (default: 2)')
