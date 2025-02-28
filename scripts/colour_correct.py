@@ -80,8 +80,8 @@ def undo_last_point(event, points, texts, ax):
             plt.draw()
     elif event.key == 'u' and len(points) == 4:
         if points:
-            points.clear()
-            while texts:
+            points.pop()
+            if texts:
                 point, text = texts.pop()
                 point[0].remove()
                 text.remove()
