@@ -78,10 +78,7 @@ def undo_last_point(event, points, texts, ax):
                 point[0].remove()
                 text.remove()
             plt.draw()
-
-def reset_points(event, points, texts, ax):
-    """ Callback for key press event to reset all points and the polygon """
-    if event.key == 'r' and len(points) == 4:
+    elif event.key == 'u' and len(points) == 4:
         if points:
             points.clear()
             while texts:
@@ -141,11 +138,8 @@ def annotate_color_checker(image_filename, csv_writer):
     # Define the mouse click event to select four corners
     fig.canvas.mpl_connect('button_press_event', lambda event: point_select_callback(event, points, texts, ax))
 
-    # Define the key press event for undoing the last point
+    # Define the key press event for undoing the last point or polygon
     fig.canvas.mpl_connect('key_press_event', lambda event: undo_last_point(event, points, texts, ax))
-
-    # Define the key press event for resetting all points and the polygon
-    fig.canvas.mpl_connect('key_press_event', lambda event: reset_points(event, points, texts, ax))
 
     # Define the key press event for checking if Enter is pressed
     fig.canvas.mpl_connect('key_press_event', lambda event: check_enter_key(event, points))
