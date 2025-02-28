@@ -55,43 +55,48 @@ targets =   {
             'Black':         [ 52,  52,  52],
             }
 
-
-def point_select_callback(event, points, texts):
+def point_select_callback(event, points, texts, ax):
     """ Callback for mouse click event to select four corners of the color checker """
     if plt.get_current_fig_manager().toolbar.mode == '':
         if len(points) < 4:
             ix, iy = event.xdata, event.ydata
             points.append((ix, iy))
-            plt.plot(ix, iy, 'ro')
+            point = plt.plot(ix, iy, 'ro')
             text = plt.text(ix, iy, str(len(points)), color='white', fontsize=12, ha='center', va='center')
-            texts.append(text)
+            texts.append((point, text))
+            plt.draw()
+            if len(points) == 4:
+                draw_polygon(points, ax)
+
+def undo_last_point(event, points, texts, ax):
+    """ Callback for key press event to undo the last point """
+    if event.key == 'u' and len(points) < 4:
+        if points:
+            points.pop()
+            if texts:
+                point, text = texts.pop()
+                point[0].remove()
+                text.remove()
             plt.draw()
 
-def undo_last_point(event, points, texts):
-    """ Callback for key press event to undo the last point """
-    if event.key == 'u' and points:
-        points.pop()
-        if plt.gca().lines:
-            plt.gca().lines[-1].remove()  # Remove the last point from the plot
-        if texts:
-            texts[-1].remove()  # Remove the last text annotation
-            texts.pop()
-        plt.draw()
+def reset_points(event, points, texts, ax):
+    """ Callback for key press event to reset all points and the polygon """
+    if event.key == 'r' and len(points) == 4:
+        if points:
+            points.clear()
+            while texts:
+                point, text = texts.pop()
+                point[0].remove()
+                text.remove()
+            for patch in ax.patches:
+                patch.remove()  # Clear the polygon
+            plt.draw()
 
-def draw_polygon(event, points):
-    """ Callback for key press event to draw the polygon around the color checker and close the interactive plot """
-    if event.key == 'enter':
-        if len(points) < 4:
-            show_error_message("Less than 4 points were chosen to extract the color checker.")
-            return
-        points = np.array(points)
-        polygon = Polygon(points, closed=True, fill=None, edgecolor='r', linewidth=2)
-        plt.gca().add_patch(polygon)
-        plt.draw()
-
-        # Wait for the plot to update
-        plt.pause(1.0)
-        plt.close()
+def draw_polygon(points, ax):
+    """ Draw the polygon around the color checker """
+    polygon = Polygon(points, closed=True, fill=None, edgecolor='r', linewidth=2)
+    ax.add_patch(polygon)
+    plt.draw()
 
 def on_close(event, points):
     """ Callback for close event to check the number of points """
@@ -107,6 +112,11 @@ def show_error_message(message):
     msg.setWindowTitle("Error")
     msg.exec_()
 
+def check_enter_key(event, points):
+    """ Callback for key press event to check if Enter is pressed and 4 points are selected """
+    if event.key == 'enter' and len(points) == 4:
+        plt.close()
+
 def annotate_color_checker(image_filename, csv_writer):
     """ Deskew and crop the color checker from the provided image """
     points = []
@@ -116,32 +126,45 @@ def annotate_color_checker(image_filename, csv_writer):
     image = cv2.imread(image_filename)
 
     # Display the image
-    fig = plt.figure()
+    fig, ax = plt.subplots()
     plt.title('Select the four corners of the color checker, starting from the top left corner and moving clockwise!')
-    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    ax.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
     # Set the window to full screen
     manager = plt.get_current_fig_manager()
     manager.full_screen_toggle()
 
-    # Define the mouse click event to select four corners
-    plt.connect('button_press_event', lambda event: point_select_callback(event, points, texts))
+    # Select the magnifier tool
+    toolbar = manager.toolbar
+    toolbar.zoom()
 
-    # Define the key press event for drawing the polygon and undoing the last point
-    plt.connect('key_press_event', lambda event: draw_polygon(event, points))
-    plt.connect('key_press_event', lambda event: undo_last_point(event, points, texts))
+    # Define the mouse click event to select four corners
+    fig.canvas.mpl_connect('button_press_event', lambda event: point_select_callback(event, points, texts, ax))
+
+    # Define the key press event for undoing the last point
+    fig.canvas.mpl_connect('key_press_event', lambda event: undo_last_point(event, points, texts, ax))
+
+    # Define the key press event for resetting all points and the polygon
+    fig.canvas.mpl_connect('key_press_event', lambda event: reset_points(event, points, texts, ax))
+
+    # Define the key press event for checking if Enter is pressed
+    fig.canvas.mpl_connect('key_press_event', lambda event: check_enter_key(event, points))
 
     # Define the close event to check the number of points
     fig.canvas.mpl_connect('close_event', lambda event: on_close(event, points))
 
-    plt.show()
+    # Define the event to deactivate the zoom tool after use
+    def deactivate_zoom(event):
+        if toolbar.mode == 'zoom rect':
+            toolbar.zoom()
+    
+    fig.canvas.mpl_connect('button_release_event', deactivate_zoom)
 
+    plt.show()
 
     # Write points to CSV
     for i, (x, y) in enumerate(points):
         csv_writer.writerow([image_filename, i + 1, x, y])
-
-    plt.close()  # Close the figure window
 
     return points
 
